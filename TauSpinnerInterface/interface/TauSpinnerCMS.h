@@ -54,11 +54,17 @@ class TauSpinnerCMS : public edm::EDProducer
   
  private:
   bool isReco_;
-  string LHAPDFname_; 
+  bool isTauolaConfigured_;
+  bool isLHPDFConfigured_;
+  string LHAPDFname_;
+  double CMSEnergy_;
   edm::InputTag gensrc_;
+  int MotherPDGID_;
+  static bool isTauSpinnerConfigure;
+
+  // Additional funtionms for Reco (not provided by Tauola/TauSpinner authors)
   int readParticlesfromReco(edm::Event& e,SimpleParticle &X,SimpleParticle &tau,SimpleParticle &tau2,
 			    std::vector<SimpleParticle> &tau_daughters,std::vector<SimpleParticle> &tau2_daughters);
   void GetRecoDaughters(const reco::GenParticle *Particle,std::vector<SimpleParticle> &daughters,int parentpdgid);
-
 }; 
 #endif

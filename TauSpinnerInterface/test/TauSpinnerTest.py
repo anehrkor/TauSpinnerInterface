@@ -11,6 +11,7 @@ process = cms.Process("TEST")
 process.load("FWCore.Framework.test.cmsExceptionsFatal_cff")
 process.load("SimGeneral.HepPDTESSource.pythiapdt_cfi")
 #process.load("SimGeneral.HepPDTESSource.pdt_cfi")
+process.load("TauSpinnerInterface.TauSpinnerInterface.TauSpinner_cfi")
 
 process.RandomNumberGeneratorService = cms.Service("RandomNumberGeneratorService",
     generator = cms.PSet(
@@ -101,15 +102,9 @@ process.pdfWeights = cms.EDProducer("PdfWeightProducer",
     "MSTW2008nnlo90cl.LHgrid"
     )
                                     )
-                                                                                     
-process.TauSpinner = cms.EDProducer( "TauSpinnerCMS",
-                                     isReco = cms.untracked.bool(False),
-                                     gensrc = cms.InputTag('genParticles')
-                                     )
-                                    
 
     
-process.p1 = cms.Path( process.TauSpinner )
+process.p1 = cms.Path( process.TauSpinnerGen )
 
 process.GEN = cms.OutputModule("PoolOutputModule",
     fileName = cms.untracked.string('Test_Py6_W2TauNu_Tauola.root')
@@ -118,5 +113,5 @@ process.GEN = cms.OutputModule("PoolOutputModule",
 process.p = cms.Path(process.generator)
 
 process.outpath = cms.EndPath(process.GEN)
-process.p1 = cms.Path(process.randomEngineStateProducer*process.TauSpinner)
+process.p1 = cms.Path(process.randomEngineStateProducer*process.TauSpinnerGen)
 process.schedule = cms.Schedule(process.p, process.p1, process.outpath)

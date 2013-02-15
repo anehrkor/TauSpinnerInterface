@@ -6,38 +6,47 @@
 #include "Tauola_wrapper.h"
 #include "TauSpinnerInterface/TauSpinnerInterface/interface/read_particles_from_HepMC.h"
 
+bool TauSpinnerCMS::isTauSpinnerConfigure=false;
+
 TauSpinnerCMS::TauSpinnerCMS( const ParameterSet& pset ) :
-  isReco_(pset.getUntrackedParameter("isReco",(bool)(false)))
+  isReco_(pset.getParameter<bool>("isReco"))
+  ,isTauolaConfigured_(pset.getParameter<bool>("isTauolaConfigured" ))
+  ,isLHPDFConfigured_(pset.getParameter<bool>("isLHPDFConfigured" ))
   ,LHAPDFname_(pset.getUntrackedParameter("LHAPDFname",(string)("MSTW2008nnlo90cl.LHgrid")))
-  ,gensrc_(pset.getParameter<edm::InputTag>( "gensrc" ))
+  ,CMSEnergy_(pset.getParameter<double>("CMSEnergy"))//GeV
+  ,gensrc_(pset.getParameter<edm::InputTag>("gensrc"))
+  ,MotherPDGID_(pset.getUntrackedParameter("MotherPDGID",(int)(-1)))
 {
-  produces<double>("TauSpinerWT").setBranchAlias("TauSpinerWT");
+  produces<double>("TauSpinnerWT").setBranchAlias("TauSpinnerWT");
+  produces<double>("TauSpinnerWTFlip").setBranchAlias("TauSpinnerWTFlip");
+  produces<double>("TauSpinnerWThplus").setBranchAlias("TauSpinnerWThplus");
+  produces<double>("TauSpinnerWThminus").setBranchAlias("TauSpinnerWThminus");
 }
 
 void TauSpinnerCMS::beginJob()
 {
-    
-  if(isReco_){
+  if(!isTauolaConfigured_){
     Tauolapp::Tauola::initialize();
-    string name="MSTW2008nnlo90cl.LHgrid";
-    LHAPDF::initPDFSetByName(name);   
   }
-  double CMSENE = 8000.0; // center of mass system energy.
-                          // used in PDF calculation. For pp collisions only
-  bool Ipp = true;  // for pp collisions 
-  // Initialize TauSpinner
-  //Ipol - polarization of input sample
-  //nonSM2 - nonstandard model calculations
-  //nonSMN
-  int Ipol=0,nonSM2=0,nonSMN=0;
-  TauSpinner::initialize_spinner(Ipp,Ipol,nonSM2,nonSMN,CMSENE);
-
-  return ;
-  
+  if(!isLHPDFConfigured_){
+    LHAPDF::initPDFSetByName(LHAPDFname_);   
+  }
+  if(!isTauSpinnerConfigure){
+    isTauSpinnerConfigure=true;
+    bool Ipp = true;  // for pp collisions 
+    // Initialize TauSpinner
+    //Ipol - polarization of input sample
+    //nonSM2 - nonstandard model calculations
+    //nonSMN
+    int Ipol=0,nonSM2=0,nonSMN=0;
+    TauSpinner::initialize_spinner(Ipp,Ipol,nonSM2,nonSMN,CMSEnergy_);
+  }
 }
 
-void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup)
-{
+void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup){
+  double WT=1.0;
+  double WTFlip=1.0;
+  double polSM=-999; //range [-1,1]
   if(!e.isRealData()){
     double WT = 1.0; 
     SimpleParticle X, tau, tau2;
@@ -52,49 +61,64 @@ void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup)
       const HepMC::GenEvent* Evt = EvtHandle->GetEvent() ;
       stat=readParticlesFromHepMC(Evt,X,tau,tau2,tau_daughters,tau_daughters2);
     }  
-
-    if(stat!=1){
-      // Determine the weight      
-
-      if( abs(X.pdgid())==24 ||  abs(X.pdgid())==37 ){
-	WT = TauSpinner::calculateWeightFromParticlesWorHpn(X, tau, tau2, tau_daughters); // note that tau2 is tau neutrino
+    if(MotherPDGID_<0 || abs(X.pdgid())==MotherPDGID_){
+      if(stat!=1){
+	// Determine the weight      
+	if( abs(X.pdgid())==24 ||  abs(X.pdgid())==37 ){
+	  WT = TauSpinner::calculateWeightFromParticlesWorHpn(X, tau, tau2, tau_daughters); // note that tau2 is tau neutrino
+	  polSM=getTauSpin();
+	  WTFlip=(2.0-WT)/WT;
+	}
+	else if( X.pdgid()==25 || X.pdgid()==36 || X.pdgid()==22 || X.pdgid()==23 ){
+	  WT = TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
+	  polSM=getTauSpin();
+	  if(X.pdgid()==25 || X.pdgid()==22 || X.pdgid()==23 ){
+	    if(X.pdgid()==25) X.setPdgid(23);
+	    if( X.pdgid()==22 || X.pdgid()==23 ) X.setPdgid(25);
+	    double WTother=TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
+	    WTFlip=WTother/WT;
+	  }
+	}
+	else{
+	  cout<<"TauSpinner: WARNING: Unexpected PDG for tau mother: "<<X.pdgid()<<endl;
+	}
       }
-      else if( X.pdgid()==25 || X.pdgid()==36 || X.pdgid()==22 || X.pdgid()==23 ){
-	WT = TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
-      }
-      else{
-	cout<<"TauSpiner: WARNING: Unexpected PDG for tau mother: "<<X.pdgid()<<endl;
-      }
+      
     }
-    
-    cout<<"Stat: "<<stat<<" WT: "<<WT<<endl;
-    
-    std::auto_ptr<double> TauSpinerWeight(new double);
-    *TauSpinerWeight =WT;    
-    
-    e.put(TauSpinerWeight,"TauSpinerWT");  
   }
+  // regular weight
+  std::auto_ptr<double> TauSpinnerWeight(new double);
+  *TauSpinnerWeight =WT;    
+  e.put(TauSpinnerWeight,"TauSpinnerWT");  
+  
+  // flipped weight (ie Z->H or H->Z)
+  std::auto_ptr<double> TauSpinnerWeightFlip(new double);
+  *TauSpinnerWeightFlip =WTFlip;
+  e.put(TauSpinnerWeightFlip,"TauSpinnerWTFlip");
+  
+  // h+ polarization
+  double WThplus=WT;
+  if(polSM<0.0 && polSM!=-999) WT=0; 
+  std::auto_ptr<double> TauSpinnerWeighthplus(new double);
+  *TauSpinnerWeighthplus = WThplus;
+  e.put(TauSpinnerWeighthplus,"TauSpinnerWThplus");
+
+  // h- polarization
+  double WThminus=WT;
+  if(polSM>0.0&& polSM!=-999) WT=0;
+  std::auto_ptr<double> TauSpinnerWeighthminus(new double);
+  *TauSpinnerWeighthminus = WThminus;
+  e.put(TauSpinnerWeighthminus,"TauSpinnerWThminus");
+  
   return ;
 }  
 
-void TauSpinnerCMS::endRun( const edm::Run& r, const edm::EventSetup& )
-{
+void TauSpinnerCMS::endRun( const edm::Run& r, const edm::EventSetup& ){}
 
-   return;
-
-}
-
-
-void TauSpinnerCMS::endJob()
-{
-
-   return ;
-}
-
-
+void TauSpinnerCMS::endJob(){}
 
 int TauSpinnerCMS::readParticlesfromReco(edm::Event& e,SimpleParticle &X,SimpleParticle &tau,SimpleParticle &tau2, 
-					std::vector<SimpleParticle> &tau_daughters,std::vector<SimpleParticle> &tau2_daughters){
+					 std::vector<SimpleParticle> &tau_daughters,std::vector<SimpleParticle> &tau2_daughters){
   edm::Handle<reco::GenParticleCollection> genParticles;
   e.getByLabel(gensrc_, genParticles);
   for(reco::GenParticleCollection::const_iterator itr = genParticles->begin(); itr!= genParticles->end(); ++itr){
