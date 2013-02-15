@@ -47,43 +47,39 @@ void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup){
   double WT=1.0;
   double WTFlip=1.0;
   double polSM=-999; //range [-1,1]
-  if(!e.isRealData()){
-    double WT = 1.0; 
-    SimpleParticle X, tau, tau2;
-    vector<SimpleParticle> tau_daughters, tau_daughters2;
-    int stat(0);
-    if(isReco_){
-      stat=readParticlesfromReco(e,X,tau,tau2,tau_daughters,tau_daughters2);
+  SimpleParticle X, tau, tau2;
+  vector<SimpleParticle> tau_daughters, tau_daughters2;
+  int stat(0);
+  if(isReco_){
+    stat=readParticlesfromReco(e,X,tau,tau2,tau_daughters,tau_daughters2);
     }
-    else{
-      Handle< HepMCProduct > EvtHandle ;
-      e.getByLabel( "generator", EvtHandle ) ;
-      const HepMC::GenEvent* Evt = EvtHandle->GetEvent() ;
-      stat=readParticlesFromHepMC(Evt,X,tau,tau2,tau_daughters,tau_daughters2);
-    }  
-    if(MotherPDGID_<0 || abs(X.pdgid())==MotherPDGID_){
-      if(stat!=1){
-	// Determine the weight      
-	if( abs(X.pdgid())==24 ||  abs(X.pdgid())==37 ){
-	  WT = TauSpinner::calculateWeightFromParticlesWorHpn(X, tau, tau2, tau_daughters); // note that tau2 is tau neutrino
-	  polSM=getTauSpin();
-	  WTFlip=(2.0-WT)/WT;
-	}
-	else if( X.pdgid()==25 || X.pdgid()==36 || X.pdgid()==22 || X.pdgid()==23 ){
-	  WT = TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
-	  polSM=getTauSpin();
-	  if(X.pdgid()==25 || X.pdgid()==22 || X.pdgid()==23 ){
-	    if(X.pdgid()==25) X.setPdgid(23);
-	    if( X.pdgid()==22 || X.pdgid()==23 ) X.setPdgid(25);
-	    double WTother=TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
-	    WTFlip=WTother/WT;
-	  }
-	}
-	else{
-	  cout<<"TauSpinner: WARNING: Unexpected PDG for tau mother: "<<X.pdgid()<<endl;
+  else{
+    Handle< HepMCProduct > EvtHandle ;
+    e.getByLabel( "generator", EvtHandle ) ;
+    const HepMC::GenEvent* Evt = EvtHandle->GetEvent() ;
+    stat=readParticlesFromHepMC(Evt,X,tau,tau2,tau_daughters,tau_daughters2);
+  }  
+  if(MotherPDGID_<0 || abs(X.pdgid())==MotherPDGID_){
+    if(stat!=1){
+      // Determine the weight      
+      if( abs(X.pdgid())==24 ||  abs(X.pdgid())==37 ){
+	WT = TauSpinner::calculateWeightFromParticlesWorHpn(X, tau, tau2, tau_daughters); // note that tau2 is tau neutrino
+	polSM=getTauSpin();
+	WTFlip=(2.0-WT)/WT;
+      }
+      else if( X.pdgid()==25 || X.pdgid()==36 || X.pdgid()==22 || X.pdgid()==23 ){
+	WT = TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
+	polSM=getTauSpin();
+	if(X.pdgid()==25 || X.pdgid()==22 || X.pdgid()==23 ){
+	  if(X.pdgid()==25) X.setPdgid(23);
+	  if( X.pdgid()==22 || X.pdgid()==23 ) X.setPdgid(25);
+	  double WTother=TauSpinner::calculateWeightFromParticlesH(X, tau, tau2, tau_daughters,tau_daughters2);
+	  WTFlip=WTother/WT;
 	}
       }
-      
+      else{
+	  cout<<"TauSpinner: WARNING: Unexpected PDG for tau mother: "<<X.pdgid()<<endl;
+      }
     }
   }
   // regular weight
