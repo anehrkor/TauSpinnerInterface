@@ -26,7 +26,7 @@ inline vector<SimpleParticle> *getDaughters(HepMC::GenParticle *x)
       delete sub_daughters;
     }
     // Otherwise - add this particle to the list of daughters.
-    else
+    else if(abs(pp->pdg_id())!=22 && pp->pdg_id()!=x->pdg_id())
     {
       SimpleParticle tp( mm.px(), mm.py(), mm.pz(), mm.e(), pp->pdg_id() );
       daughters->push_back(tp);
@@ -35,6 +35,7 @@ inline vector<SimpleParticle> *getDaughters(HepMC::GenParticle *x)
 
   return daughters;
 }
+
 
 /*******************************************************************************
   Find last self
@@ -101,10 +102,9 @@ int readParticlesFromHepMC(const HepMC::GenEvent *event, SimpleParticle &X, Simp
 
       hTau = hTau2 = NULL;
 
-      for(HepMC::GenVertex::particles_out_const_iterator it2 = hX->end_vertex()->particles_out_const_begin(); it2!=hX->end_vertex()->particles_out_const_end(); ++it2)
+      for(HepMC::GenVertex::particle_iterator it2 = hX->end_vertex()->particles_begin(HepMC::children); it2!=hX->end_vertex()->particles_end(HepMC::children); ++it2)
       {
-        if (abs( (*it2)->pdg_id() )==15  && (*it2)->end_vertex() )
-        {
+        if (abs( (*it2)->pdg_id() )==15  && (*it2)->end_vertex() ){
           if(!hTau)       hTau  = *it2;
           else if(!hTau2) hTau2 = *it2;
           else
@@ -132,7 +132,7 @@ int readParticlesFromHepMC(const HepMC::GenEvent *event, SimpleParticle &X, Simp
 
   if(!hTau || !hTau2)
   {
-    cout<<"TauSpiner: boson found but no proper tau pair or tau + neutrino found."<<endl;
+    //cout<<"TauSpiner: boson found but no proper tau pair or tau + neutrino found."<<endl;
     return 1;
   }
 

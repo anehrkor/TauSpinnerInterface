@@ -166,7 +166,7 @@ int TauSpinnerCMS::readParticlesfromReco(edm::Event& e,SimpleParticle &X,SimpleP
 
 
 void TauSpinnerCMS::GetRecoDaughters(const reco::GenParticle *Particle,std::vector<SimpleParticle> &daughters, int parentpdgid){
-  if(Particle->pdgId()!=parentpdgid){
+  if(Particle->pdgId()!=parentpdgid && abs(Particle->pdgId())!=22){
     SimpleParticle tp(Particle->p4().Px(), Particle->p4().Py(), Particle->p4().Pz(), Particle->p4().E(), Particle->pdgId());
     daughters.push_back(tp);
   }
