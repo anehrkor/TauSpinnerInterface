@@ -26,7 +26,7 @@ inline vector<SimpleParticle> *getDaughters(HepMC::GenParticle *x)
       delete sub_daughters;
     }
     // Otherwise - add this particle to the list of daughters.
-    else if(abs(pp->pdg_id())!=22 && pp->pdg_id()!=x->pdg_id())
+    else if(pp->pdg_id()!=x->pdg_id())
     {
       SimpleParticle tp( mm.px(), mm.py(), mm.pz(), mm.e(), pp->pdg_id() );
       daughters->push_back(tp);
@@ -47,12 +47,19 @@ inline HepMC::GenParticle *findLastSelf(HepMC::GenParticle *x)
 {
   if(!x->end_vertex()) return x;
 
-  for(HepMC::GenVertex::particles_out_const_iterator p = x->end_vertex()->particles_out_const_begin(); p!=x->end_vertex()->particles_out_const_end(); ++p)
+  for(HepMC::GenVertex::particle_iterator p = x->end_vertex()->particles_begin(HepMC::children); p!=x->end_vertex()->particles_end(HepMC::children); ++p)
   {
     if( (*p)->pdg_id()==x->pdg_id() ) return findLastSelf( *p );
   }
 
   return x;
+}
+
+inline bool isFirst(HepMC::GenParticle *x){
+  for(HepMC::GenVertex::particle_iterator p = x->production_vertex()->particles_begin(HepMC::parents); p!=x->production_vertex()->particles_end(HepMC::parents); ++p){
+    if(x->pdg_id()==(*p)->pdg_id()) return false; 
+  }
+  return true;
 }
 
 /*******************************************************************************
@@ -99,10 +106,12 @@ int readParticlesFromHepMC(const HepMC::GenEvent *event, SimpleParticle &X, Simp
       )
     {
       hX = *it;
-
+      HepMC::GenParticle *LhX=hX;
+      if(!isFirst(hX)) continue;
+      findLastSelf(LhX);
       hTau = hTau2 = NULL;
 
-      for(HepMC::GenVertex::particle_iterator it2 = hX->end_vertex()->particles_begin(HepMC::children); it2!=hX->end_vertex()->particles_end(HepMC::children); ++it2)
+      for(HepMC::GenVertex::particle_iterator it2 = LhX->end_vertex()->particles_begin(HepMC::children); it2!=LhX->end_vertex()->particles_end(HepMC::children); ++it2)
       {
         if (abs( (*it2)->pdg_id() )==15  && (*it2)->end_vertex() ){
           if(!hTau)       hTau  = *it2;

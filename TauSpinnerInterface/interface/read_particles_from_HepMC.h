@@ -41,5 +41,5 @@ vector<SimpleParticle> *getDaughters(HepMC::GenParticle *x);
   Recursively finds the last particle with the same PDG ID
   on the list of its decay products */
 HepMC::GenParticle *findLastSelf(HepMC::GenParticle *x);
-
+bool isFirst(HepMC::GenParticle *x);
 #endif

@@ -16,7 +16,11 @@ TauSpinnerCMS::TauSpinnerCMS( const ParameterSet& pset ) :
   ,CMSEnergy_(pset.getParameter<double>("CMSEnergy"))//GeV
   ,gensrc_(pset.getParameter<edm::InputTag>("gensrc"))
   ,MotherPDGID_(pset.getUntrackedParameter("MotherPDGID",(int)(-1)))
+  ,Ipol_(pset.getUntrackedParameter("Ipol",(int)(0)))
+  ,nonSM2_(pset.getUntrackedParameter("nonSM2",(int)(0)))
+  ,nonSMN_(pset.getUntrackedParameter("nonSMN",(int)(0)))
 {
+  produces<bool>("TauSpinnerWTisValid").setBranchAlias("TauSpinnerWTisValid");
   produces<double>("TauSpinnerWT").setBranchAlias("TauSpinnerWT");
   produces<double>("TauSpinnerWTFlip").setBranchAlias("TauSpinnerWTFlip");
   produces<double>("TauSpinnerWThplus").setBranchAlias("TauSpinnerWThplus");
@@ -38,8 +42,7 @@ void TauSpinnerCMS::beginJob()
     //Ipol - polarization of input sample
     //nonSM2 - nonstandard model calculations
     //nonSMN
-    int Ipol=0,nonSM2=0,nonSMN=0;
-    TauSpinner::initialize_spinner(Ipp,Ipol,nonSM2,nonSMN,CMSEnergy_);
+    TauSpinner::initialize_spinner(Ipp,Ipol_,nonSM2_,nonSMN_,CMSEnergy_);
   }
 }
 
@@ -52,7 +55,7 @@ void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup){
   int stat(0);
   if(isReco_){
     stat=readParticlesfromReco(e,X,tau,tau2,tau_daughters,tau_daughters2);
-    }
+  }
   else{
     Handle< HepMCProduct > EvtHandle ;
     e.getByLabel( "generator", EvtHandle ) ;
@@ -82,6 +85,12 @@ void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup){
       }
     }
   }
+  bool isValid=true;
+  if(!(0<=WT && WT<10)){isValid=false; WT=1.0; WTFlip=1.0;}
+  std::auto_ptr<bool> TauSpinnerWeightisValid(new bool);
+  *TauSpinnerWeightisValid =isValid;
+  e.put(TauSpinnerWeightisValid,"TauSpinnerWTisValid");
+
   // regular weight
   std::auto_ptr<double> TauSpinnerWeight(new double);
   *TauSpinnerWeight =WT;    
@@ -94,14 +103,14 @@ void TauSpinnerCMS::produce( edm::Event& e, const edm::EventSetup& iSetup){
   
   // h+ polarization
   double WThplus=WT;
-  if(polSM<0.0 && polSM!=-999) WT=0; 
+  if(polSM<0.0 && polSM!=-999 && isValid) WThplus=0; 
   std::auto_ptr<double> TauSpinnerWeighthplus(new double);
   *TauSpinnerWeighthplus = WThplus;
   e.put(TauSpinnerWeighthplus,"TauSpinnerWThplus");
 
   // h- polarization
   double WThminus=WT;
-  if(polSM>0.0&& polSM!=-999) WT=0;
+  if(polSM>0.0&& polSM!=-999 && isValid) WThminus=0;
   std::auto_ptr<double> TauSpinnerWeighthminus(new double);
   *TauSpinnerWeighthminus = WThminus;
   e.put(TauSpinnerWeighthminus,"TauSpinnerWThminus");
@@ -120,6 +129,9 @@ int TauSpinnerCMS::readParticlesfromReco(edm::Event& e,SimpleParticle &X,SimpleP
   for(reco::GenParticleCollection::const_iterator itr = genParticles->begin(); itr!= genParticles->end(); ++itr){
     int pdgid=abs(itr->pdgId());
     if(pdgid==24 || pdgid==37 || pdgid ==25 || pdgid==36 || pdgid==22 || pdgid==23 ){
+      const reco::GenParticle *hx=&(*itr);
+      if(!isFirst(hx)) continue;
+      GetLastSelf(hx);
       const reco::GenParticle *recotau1=NULL;
       const reco::GenParticle *recotau2=NULL;
       unsigned int ntau(0),ntauornu(0);
@@ -129,11 +141,12 @@ int TauSpinnerCMS::readParticlesfromReco(edm::Event& e,SimpleParticle &X,SimpleP
 	  if(abs(dau->pdgId())==15 || abs(dau->pdgId())==16){
 	    if(ntau==0 && abs(dau->pdgId())==15){
 	      recotau1=static_cast<const reco::GenParticle*>(dau);
+	      GetLastSelf(recotau1);
 	      ntau++;
 	    }
 	    else if((ntau==1 && abs(dau->pdgId())==15) || abs(dau->pdgId())==16){
 	      recotau2=static_cast<const reco::GenParticle*>(dau);
-	      if(abs(dau->pdgId())==15) ntau++;
+	      if(abs(dau->pdgId())==15){ntau++;GetLastSelf(recotau2);}
 	    }
 	    ntauornu++;
 	  }
@@ -164,15 +177,38 @@ int TauSpinnerCMS::readParticlesfromReco(edm::Event& e,SimpleParticle &X,SimpleP
   return 1;
 }
 
+void TauSpinnerCMS::GetLastSelf(const reco::GenParticle *Particle){
+  for (unsigned int i=0; i< Particle->numberOfDaughters(); i++){
+    const reco::GenParticle *dau=static_cast<const reco::GenParticle*>(Particle->daughter(i));
+    if(Particle->pdgId()==dau->pdgId()){
+      Particle=dau;
+      GetLastSelf(Particle);  
+    }
+  }
+}
+
+bool TauSpinnerCMS::isFirst(const reco::GenParticle *Particle){
+  for (unsigned int i=0; i< Particle->numberOfMothers(); i++){
+    const reco::GenParticle *moth=static_cast<const reco::GenParticle*>(Particle->mother(i));
+    if(Particle->pdgId()==moth->pdgId()){
+      return false;
+    }
+  }
+  return true;
+}
 
 void TauSpinnerCMS::GetRecoDaughters(const reco::GenParticle *Particle,std::vector<SimpleParticle> &daughters, int parentpdgid){
-  if(Particle->pdgId()!=parentpdgid && abs(Particle->pdgId())!=22){
+  if(Particle->pdgId()!=parentpdgid){
     SimpleParticle tp(Particle->p4().Px(), Particle->p4().Py(), Particle->p4().Pz(), Particle->p4().E(), Particle->pdgId());
     daughters.push_back(tp);
   }
   for (unsigned int i=0; i< Particle->numberOfDaughters(); i++){
     const reco::Candidate *dau=Particle->daughter(i);
-    if(abs(Particle->pdgId())!=111)GetRecoDaughters(static_cast<const reco::GenParticle*>(dau),daughters,Particle->pdgId());
+    if(abs(Particle->pdgId())!=111){GetRecoDaughters(static_cast<const reco::GenParticle*>(dau),daughters,Particle->pdgId());}
+    else if(abs(Particle->pdgId())==111){    
+      SimpleParticle tp(Particle->p4().Px(), Particle->p4().Py(), Particle->p4().Pz(), Particle->p4().E(), Particle->pdgId());
+      daughters.push_back(tp);
+    }
   }
 }
 
